@@ -58,8 +58,8 @@ extension UIViewController {
 private func bounceKeyFrameAnimationForDistanceOnView(distance: CGFloat, view: UIView) -> CAKeyframeAnimation {
     let factors: [CGFloat] = [0, 32, 60, 83, 100, 114, 124, 128, 128, 124, 114, 100, 83, 60, 32, 0, 24, 42, 54, 62, 64, 62, 54, 42, 24, 0, 18, 28, 32, 28, 18, 0]
     
-    let values = factors.map({ x in
-        NSNumber(float: Float(x / 128 * distance + CGRectGetMidX(view.bounds)))
+    let values = factors.map({
+        NSNumber(float: Float($0 / 128 * distance + CGRectGetMidX(view.bounds)))
     })
     
     let animation = CAKeyframeAnimation(keyPath: "position.x")
@@ -349,7 +349,7 @@ public class DrawerController: UIViewController, UIGestureRecognizerDelegate {
         }()
     
     private lazy var centerContainerView: DrawerCenterContainerView = {
-        let centerFrame = self.childControllerContainerView.bounds
+        let centerFrame = self.frameForCenterContainerView()
         
         let centerContainerView = DrawerCenterContainerView(frame: centerFrame)
         centerContainerView.autoresizingMask = .FlexibleWidth | .FlexibleHeight
@@ -689,9 +689,9 @@ public class DrawerController: UIViewController, UIGestureRecognizerDelegate {
     private func prepareToPresentDrawer(drawer: DrawerSide, animated: Bool) {
         var drawerToHide: DrawerSide = .None
         
-        if drawer == .Left {
+        if drawer == .Left && !self.drawerForSideIsFixed(.Right) {
             drawerToHide = .Right
-        } else if drawer == .Right {
+        } else if drawer == .Right && !self.drawerForSideIsFixed(.Left) {
             drawerToHide = .Left
         }
         
@@ -734,21 +734,38 @@ public class DrawerController: UIViewController, UIGestureRecognizerDelegate {
         }
     }
     
+    private func updateSizeClassesOfChildViewControllers() {
+        // TODO: ChildViewControllers should have a compact width size class in regular width size classes if at least one SideDrawerController should always be visible
+    }
+    
     private func updateSizeOfCenterContainerView() {
-        // TODO: evtl. animieren?
-        var centerFrame = self.childControllerContainerView.bounds
-        var oldFrame = centerFrame
+        var centerFrame = self.frameForCenterContainerView()
         
-        if self.shouldAlwaysShowLeftDrawerInRegularHorizontalSizeClass && self.traitCollection.horizontalSizeClass == .Regular {
-            centerFrame.size.width -= self.maximumLeftDrawerWidth
-            centerFrame.origin.x += self.maximumLeftDrawerWidth
+        if let leftDrawerViewController = self.sideDrawerViewControllerForSide(.Left) {
+            if self.drawerForSideIsFixed(.Left) {
+                leftDrawerViewController.view.hidden = false
+                self.resetDrawerVisualStateForDrawerSide(.Left)
+                leftDrawerViewController.view.frame = leftDrawerViewController.evo_visibleDrawerFrame
+                self.updateDrawerVisualStateForDrawerSide(.Left, percentVisible: 0.0)
+                leftDrawerViewController.beginAppearanceTransition(true, animated: false)
+                leftDrawerViewController.endAppearanceTransition()
+                self.updateDrawerVisualStateForDrawerSide(.Left, percentVisible: 1.0)
+            }
         }
         
-        if self.shouldAlwaysShowRightDrawerInRegularHorizontalSizeClass && self.traitCollection.horizontalSizeClass == .Regular {
-            centerFrame.size.width -= self.maximumRightDrawerWidth
+        if let rightDrawerViewController = self.sideDrawerViewControllerForSide(.Right) {
+            if self.drawerForSideIsFixed(.Right) {
+                rightDrawerViewController.view.hidden = false
+                self.resetDrawerVisualStateForDrawerSide(.Right)
+                rightDrawerViewController.view.frame = rightDrawerViewController.evo_visibleDrawerFrame
+                self.updateDrawerVisualStateForDrawerSide(.Right, percentVisible: 0.0)
+                rightDrawerViewController.beginAppearanceTransition(true, animated: false)
+                rightDrawerViewController.endAppearanceTransition()
+                self.updateDrawerVisualStateForDrawerSide(.Right, percentVisible: 1.0)
+            }
         }
         
-        if oldFrame != centerFrame {
+        if self.centerContainerView.frame != centerFrame {
             self.centerContainerView.frame = centerFrame
         }
     }
@@ -757,7 +774,36 @@ public class DrawerController: UIViewController, UIGestureRecognizerDelegate {
         return NSTimeInterval(max(distance / self.animationVelocity, DrawerMinimumAnimationDuration))
     }
     
+    private func drawerForSideIsFixed(drawerSide: DrawerSide) -> Bool {
+        if drawerSide == .Left {
+            return self.shouldAlwaysShowLeftDrawerInRegularHorizontalSizeClass && self.traitCollection.horizontalSizeClass == .Regular
+        } else if drawerSide == .Right {
+            return self.shouldAlwaysShowRightDrawerInRegularHorizontalSizeClass && self.traitCollection.horizontalSizeClass == .Regular
+        }
+        
+        return true
+    }
+    
     // MARK: - Size Methods
+    
+    private func frameForCenterContainerView() -> CGRect {
+        var centerFrame = self.childControllerContainerView.bounds
+        
+        if let leftDrawerViewController = self.sideDrawerViewControllerForSide(.Left) {
+            if self.drawerForSideIsFixed(.Left) {
+                centerFrame.size.width -= self.maximumLeftDrawerWidth
+                centerFrame.origin.x += self.maximumLeftDrawerWidth
+            }
+        }
+        
+        if let rightDrawerViewController = self.sideDrawerViewControllerForSide(.Right) {
+            if self.drawerForSideIsFixed(.Right) {
+                centerFrame.size.width -= self.maximumRightDrawerWidth
+            }
+        }
+        
+        return centerFrame;
+    }
     
     /**
     Sets the maximum width of the left drawer view controller.
@@ -812,9 +858,8 @@ public class DrawerController: UIViewController, UIGestureRecognizerDelegate {
             let distance: CGFloat = abs(width - oldWidth)
             let duration: NSTimeInterval = animated ? self.animationDurationForAnimationDistance(distance) : 0.0
             
-            if self.openSide == drawerSide {
-                var newCenterRect = self.centerContainerView.frame
-                newCenterRect.origin.x = CGFloat(drawerSideOriginCorrection) * width
+            if self.openSide == drawerSide || self.drawerForSideIsFixed(drawerSide) {
+                var newCenterRect = self.frameForCenterContainerView()
                 
                 UIView.animateWithDuration(duration, delay: 0.0, usingSpringWithDamping: self.drawerDampingFactor, initialSpringVelocity: self.animationVelocity / distance, options: nil, animations: { () -> Void in
                     self.centerContainerView.frame = newCenterRect
@@ -880,7 +925,7 @@ public class DrawerController: UIViewController, UIGestureRecognizerDelegate {
                 self.childControllerContainerView.addSubview(viewController!.view)
                 self.childControllerContainerView.sendSubviewToBack(viewController!.view)
                 
-                if (drawerSide == .Left && self.shouldAlwaysShowLeftDrawerInRegularHorizontalSizeClass && self.traitCollection.horizontalSizeClass == .Regular) || (drawerSide == .Right && self.shouldAlwaysShowRightDrawerInRegularHorizontalSizeClass && self.traitCollection.horizontalSizeClass == .Regular) {
+                if self.drawerForSideIsFixed(drawerSide) {
                     viewController!.view.hidden = false
                 } else {
                     viewController!.view.hidden = true
@@ -891,6 +936,8 @@ public class DrawerController: UIViewController, UIGestureRecognizerDelegate {
             viewController!.view.autoresizingMask = autoResizingMask
             viewController!.view.frame = viewController!.evo_visibleDrawerFrame
         }
+        
+        self.updateSizeOfCenterContainerView()
     }
     
     // MARK: - Updating the Center View Controller
@@ -919,7 +966,7 @@ public class DrawerController: UIViewController, UIGestureRecognizerDelegate {
         
         if self._centerViewController != nil {
             self.addChildViewController(self._centerViewController!)
-            self._centerViewController!.view.frame = self.childControllerContainerView.bounds
+            self._centerViewController!.view.frame = self.frameForCenterContainerView()
             self.centerContainerView.addSubview(self._centerViewController!.view)
             self.childControllerContainerView.bringSubviewToFront(self.centerContainerView)
             self._centerViewController!.view.autoresizingMask = .FlexibleWidth | .FlexibleHeight
@@ -953,10 +1000,10 @@ public class DrawerController: UIViewController, UIGestureRecognizerDelegate {
             animated = false
         }
         
-        let forwardAppearanceMethodsToCenterViewController = (self.centerViewController! == newCenterViewController) == false
         self.setCenterViewController(newCenterViewController, animated: animated)
         
         if animated {
+            let forwardAppearanceMethodsToCenterViewController = (self.centerViewController! == newCenterViewController) == false
             self.updateDrawerVisualStateForDrawerSide(self.openSide, percentVisible: 1.0)
             
             if forwardAppearanceMethodsToCenterViewController {
@@ -986,7 +1033,7 @@ public class DrawerController: UIViewController, UIGestureRecognizerDelegate {
     :param: completion The block called when the animation is finsihed.
     
     */
-    public func setCenterViewController(newCenterViewController: UIViewController, withFullCloseAnimation animated: Bool, completion: ((Bool) -> Void)?) {
+    public func setCenterViewController(newCenterViewController: UIViewController, var withFullCloseAnimation animated: Bool, completion: ((Bool) -> Void)?) {
         if self.openSide != .None && animated {
             let forwardAppearanceMethodsToCenterViewController = (self.centerViewController! == newCenterViewController) == false
             let sideDrawerViewController = self.sideDrawerViewControllerForSide(self.openSide)
@@ -1053,6 +1100,10 @@ public class DrawerController: UIViewController, UIGestureRecognizerDelegate {
                     })
             })
         } else {
+            if self.drawerForSideIsFixed(.Left) || self.drawerForSideIsFixed(.Right) {
+                animated = false
+            }
+            
             self.setCenterViewController(newCenterViewController, animated: animated)
             
             if self.openSide != .None {
@@ -1095,7 +1146,7 @@ public class DrawerController: UIViewController, UIGestureRecognizerDelegate {
         
         let sideDrawerViewController = self.sideDrawerViewControllerForSide(drawerSide)
         
-        if sideDrawerViewController == nil || self.openSide != .None {
+        if sideDrawerViewController == nil || self.openSide != .None || self.drawerForSideIsFixed(drawerSide) {
             completion?(false)
             return
         } else {
@@ -1160,23 +1211,25 @@ public class DrawerController: UIViewController, UIGestureRecognizerDelegate {
             }
             
             if let visibleSideDrawerViewController = self.sideDrawerViewControllerForSide(visibleSide) {
-                if self.openSide != visibleSide {
-                    // Handle disappearing the visible drawer
-                    if let sideDrawerViewController = self.sideDrawerViewControllerForSide(self.openSide) {
-                        sideDrawerViewController.beginAppearanceTransition(false, animated: false)
-                        sideDrawerViewController.endAppearanceTransition()
+                if !self.drawerForSideIsFixed(visibleSide) {
+                    if self.openSide != visibleSide {
+                        // Handle disappearing the visible drawer
+                        if let sideDrawerViewController = self.sideDrawerViewControllerForSide(self.openSide) {
+                            sideDrawerViewController.beginAppearanceTransition(false, animated: false)
+                            sideDrawerViewController.endAppearanceTransition()
+                        }
+                        
+                        // Drawer is about to become visible
+                        self.prepareToPresentDrawer(visibleSide, animated: false)
+                        visibleSideDrawerViewController.endAppearanceTransition()
+                        self.openSide = visibleSide
+                    } else if visibleSide == .None {
+                        self.openSide = .None
                     }
                     
-                    // Drawer is about to become visible
-                    self.prepareToPresentDrawer(visibleSide, animated: false)
-                    visibleSideDrawerViewController.endAppearanceTransition()
-                    self.openSide = visibleSide
-                } else if visibleSide == .None {
-                    self.openSide = .None
+                    self.updateDrawerVisualStateForDrawerSide(visibleSide, percentVisible: percentVisible)
+                    self.centerContainerView.center = CGPoint(x: CGRectGetMidX(newFrame), y: CGRectGetMidY(newFrame))
                 }
-                
-                self.updateDrawerVisualStateForDrawerSide(visibleSide, percentVisible: percentVisible)
-                self.centerContainerView.center = CGPoint(x: CGRectGetMidX(newFrame), y: CGRectGetMidY(newFrame))
             }
         case .Ended, .Cancelled:
             self.startingPanRect = CGRectNull
@@ -1253,6 +1306,9 @@ public class DrawerController: UIViewController, UIGestureRecognizerDelegate {
         
         if self.animatingDrawer {
             completion?(false)
+        } else if self.drawerForSideIsFixed(drawerSide) {
+            completion?(false)
+            return
         } else {
             self.animatingDrawer = animated
             let sideDrawerViewController = self.sideDrawerViewControllerForSide(drawerSide)
@@ -1310,9 +1366,12 @@ public class DrawerController: UIViewController, UIGestureRecognizerDelegate {
     private func closeDrawerAnimated(animated: Bool, velocity: CGFloat, animationOptions options: UIViewAnimationOptions, completion: ((Bool) -> Void)?) {
         if self.animatingDrawer {
             completion?(false)
+        } else if self.drawerForSideIsFixed(self.openSide) {
+            completion?(false)
+            return
         } else {
             self.animatingDrawer = animated
-            let newFrame = self.childControllerContainerView.bounds
+            let newFrame = self.frameForCenterContainerView()
             
             let distance = abs(CGRectGetMinX(self.centerContainerView.frame))
             let duration: NSTimeInterval = animated ? NSTimeInterval(max(distance / abs(velocity), DrawerMinimumAnimationDuration)) : 0.0
@@ -1412,41 +1471,14 @@ public class DrawerController: UIViewController, UIGestureRecognizerDelegate {
         return false
     }
     
-    // MARK: - UIContentContainer
-    
-    public override func viewWillTransitionToSize(size: CGSize, withTransitionCoordinator coordinator: UIViewControllerTransitionCoordinator) {
-        // TODO
-        println("viewWillTransitionToSize: \(size)")
-        super.viewWillTransitionToSize(size, withTransitionCoordinator: coordinator)
-    }
-    
-    public override func willTransitionToTraitCollection(newCollection: UITraitCollection, withTransitionCoordinator coordinator: UIViewControllerTransitionCoordinator) {
-        // TODO
-        println("willTransitionToTraitCollection: \(newCollection)")
-        super.willTransitionToTraitCollection(newCollection, withTransitionCoordinator: coordinator)
-    }
-    
-    public override func preferredContentSizeDidChangeForChildContentContainer(container: UIContentContainer) {
-        // TODO
-        println("preferredContentSizeDidChange: \(container)")
-        super.preferredContentSizeDidChangeForChildContentContainer(container)
-    }
-    
-    public override func systemLayoutFittingSizeDidChangeForChildContentContainer(container: UIContentContainer) {
-        // TODO
-        println("systemLayoutFittingSizeDidChange: \(container)")
-        super.systemLayoutFittingSizeDidChangeForChildContentContainer(container)
-    }
-    
     // MARK: - UITraitEnvironment
     
     public override func traitCollectionDidChange(previousTraitCollection: UITraitCollection) {
-        // TODO
-        //        println("traitCollectionDidChange previous: \(previousTraitCollection), new: \(self.traitCollection)")
         super.traitCollectionDidChange(previousTraitCollection)
+
+        // TODO: Check self.openSide and set frames accordingly
+        self.updateSizeOfCenterContainerView()
     }
-    
-    // TODO: Size Classes: Man soll wählen können, ob die linke oder rechte Seite in der "Regular Width" Size Class stehen bleibt (iPad Portrait/Landscape und iPhone 6 Plus Landscape), siehe https://developer.apple.com/library/prerelease/ios/documentation/UIKit/Reference/UIContentContainer_Ref/index.html
     
     // MARK: - UIGestureRecognizerDelegate
     

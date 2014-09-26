@@ -101,6 +101,7 @@ class ExampleLeftSideDrawerViewController: ExampleSideDrawerViewController {
         } else if indexPath.section == DrawerSection.AlwaysShowDrawerInRegularHorizontalSizeClass.toRaw() {
             self.evo_drawerController?.shouldAlwaysShowLeftDrawerInRegularHorizontalSizeClass = !self.evo_drawerController!.shouldAlwaysShowLeftDrawerInRegularHorizontalSizeClass
             tableView.reloadSections(NSIndexSet(index: indexPath.section), withRowAnimation: .None)
+            NSNotificationCenter.defaultCenter().postNotificationName(kSideDrawerControllerFixedDidChangeNotification, object: nil)
         } else {
             super.tableView(tableView, didSelectRowAtIndexPath: indexPath)
         }

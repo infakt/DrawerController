@@ -60,8 +60,7 @@ class ExampleCenterTableViewController: ExampleViewController, UITableViewDataSo
         twoFingerDoubleTap.numberOfTouchesRequired = 2
         self.view.addGestureRecognizer(twoFingerDoubleTap)
         
-        self.setupLeftMenuButton()
-        self.setupRightMenuButton()
+        self.updateBarButtonItems()
         
         let barColor = UIColor(red: 247/255, green: 249/255, blue: 250/255, alpha: 1.0)
         self.navigationController?.navigationBar.barTintColor = barColor
@@ -71,6 +70,10 @@ class ExampleCenterTableViewController: ExampleViewController, UITableViewDataSo
         let backView = UIView()
         backView.backgroundColor = UIColor(red: 208/255, green: 208/255, blue: 208/255, alpha: 1.0)
         self.tableView.backgroundView = backView
+        
+        NSNotificationCenter.defaultCenter().addObserverForName(kSideDrawerControllerFixedDidChangeNotification, object: nil, queue: NSOperationQueue.mainQueue()) { (note) -> Void in
+            self.updateBarButtonItems()
+        }
     }
     
     override func viewWillAppear(animated: Bool) {
@@ -93,6 +96,11 @@ class ExampleCenterTableViewController: ExampleViewController, UITableViewDataSo
         println("Center did disappear")
     }
     
+    override func traitCollectionDidChange(previousTraitCollection: UITraitCollection) {
+        super.traitCollectionDidChange(previousTraitCollection)
+        self.updateBarButtonItems()
+    }
+    
     func setupLeftMenuButton() {
         let leftDrawerButton = DrawerBarButtonItem(target: self, action: "leftDrawerButtonPress:")
         self.navigationItem.setLeftBarButtonItem(leftDrawerButton, animated: true)
@@ -105,6 +113,22 @@ class ExampleCenterTableViewController: ExampleViewController, UITableViewDataSo
     
     override func contentSizeDidChange(size: String) {
         self.tableView.reloadData()
+    }
+    
+    // MARK - Helpers
+    
+    func updateBarButtonItems() {
+        if self.evo_drawerController?.leftDrawerViewController == nil || (self.evo_drawerController!.shouldAlwaysShowLeftDrawerInRegularHorizontalSizeClass && self.traitCollection.horizontalSizeClass == .Regular) {
+            self.navigationItem.setLeftBarButtonItem(nil, animated: true)
+        } else {
+            self.setupLeftMenuButton()
+        }
+        
+        if self.evo_drawerController?.rightDrawerViewController == nil || (self.evo_drawerController!.shouldAlwaysShowRightDrawerInRegularHorizontalSizeClass && self.traitCollection.horizontalSizeClass == .Regular) {
+            self.navigationItem.setRightBarButtonItem(nil, animated: true)
+        } else {
+            self.setupRightMenuButton()
+        }
     }
     
     // MARK: - UITableViewDataSource
@@ -242,10 +266,10 @@ class ExampleCenterTableViewController: ExampleViewController, UITableViewDataSo
                 self.evo_drawerController?.closeDrawerAnimated(true, completion: { (finished) -> Void in
                     if drawerSide == DrawerSide.Left {
                         self.evo_drawerController?.leftDrawerViewController = nil
-                        self.navigationItem.setLeftBarButtonItems(nil, animated: true)
+                        self.updateBarButtonItems()
                     } else if drawerSide == .Right {
                         self.evo_drawerController?.rightDrawerViewController = nil
-                        self.navigationItem.setRightBarButtonItems(nil, animated: true)
+                        self.updateBarButtonItems()
                     }
                     
                     tableView.reloadRowsAtIndexPaths([indexPath], withRowAnimation: .None)

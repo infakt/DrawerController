@@ -31,6 +31,8 @@ enum DrawerSection: Int {
     case AlwaysShowDrawerInRegularHorizontalSizeClass
 }
 
+public let kSideDrawerControllerFixedDidChangeNotification = "io.evolved.DrawerController.sideDrawerControllerFixedDidChangeNotification"
+
 class ExampleSideDrawerViewController: ExampleViewController, UITableViewDataSource, UITableViewDelegate {
     var tableView: UITableView!
     let drawerWidths: [CGFloat] = [160, 200, 240, 280, 320]
