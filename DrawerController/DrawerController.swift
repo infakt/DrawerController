@@ -718,7 +718,7 @@ public class DrawerController: UIViewController, UIGestureRecognizerDelegate {
             self.centerContainerView.layer.shadowRadius = 0.0
             self.centerContainerView.layer.shadowOpacity = 0.0
             self.centerContainerView.layer.shadowPath = nil
-            self.centerContainerView.layer.masksToBounds = true
+            self.centerContainerView.layer.masksToBounds = false
         }
     }
     
