@@ -1109,7 +1109,6 @@ public class DrawerController: UIViewController, UIGestureRecognizerDelegate {
             var newFrame = self.startingPanRect
             let translatedPoint = panGesture.translationInView(self.centerContainerView)
             newFrame.origin.x = self.roundedOriginXForDrawerConstraints(CGRectGetMinX(self.startingPanRect) + translatedPoint.x)
-            newFrame = CGRectIntegral(newFrame)
             let xOffset = newFrame.origin.x
             
             var visibleSide: DrawerSide = .None
